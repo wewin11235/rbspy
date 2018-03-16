@@ -14,16 +14,6 @@ pub struct MapRange {
     pub pathname: Option<String>,
 }
 
-impl MapRange {
-    pub fn contains_addr(&self, addr: usize) -> bool {
-        addr >= self.range_start && addr <= self.range_end
-    }
-}
-
-pub fn maps_contain_addr(addr: usize, maps: &Vec<MapRange>) -> bool {
-    maps.iter().any({ |map| map.contains_addr(addr) })
-}
-
 pub fn get_proc_maps(pid: pid_t) -> Result<Vec<MapRange>, std::io::Error> {
     // Parses /proc/PID/maps into a Vec<MapRange>
     // TODO: factor this out into a crate and make it work on Mac too

@@ -2,7 +2,6 @@ use core::address_finder::*;
 use core::address_finder;
 use core::copy::*;
 use core::copy;
-use core::proc_maps::*;
 use core::ruby_version;
 use core::types::{StackTrace, Process};
 
@@ -29,15 +28,14 @@ use std;
  */
 pub fn initialize(pid: pid_t) -> Result<StackTraceGetter<ProcessHandle>, Error> {
     let version = get_ruby_version_retry(pid).context("Couldn't determine Ruby version")?;
-    let is_maybe_thread = is_maybe_thread_function(&version);
+    let is_maybe_vm = is_maybe_vm_function(&version);
 
     debug!("version: {}", version);
     Ok(StackTraceGetter {
         process: Process{pid: Some(pid), source: pid.try_into_process_handle()?},
-        current_thread_addr_location: address_finder::current_thread_address(
+        current_thread_addr_location: address_finder::current_vm_address(
             pid,
-            &version,
-            is_maybe_thread,
+            is_maybe_vm,
         )?,
         stack_trace_function: get_stack_trace_function(&version),
     })
@@ -154,12 +152,12 @@ fn test_get_disallowed_process() {
 
 #[test]
 #[cfg(target_os = "linux")]
-fn test_current_thread_address() {
+fn test_current_vm_address() {
     let mut process = std::process::Command::new("/usr/bin/ruby").arg("./ci/ruby-programs/infinite.rb").spawn().unwrap();
     let pid = process.id() as pid_t;
     let version = get_ruby_version_retry(pid).expect("version should exist");
-    let is_maybe_thread = is_maybe_thread_function(&version);
-    let result = address_finder::current_thread_address(pid, &version, is_maybe_thread);
+    let is_maybe_vm = is_maybe_vm_function(&version);
+    let result = address_finder::current_vm_address(pid, is_maybe_vm);
     assert!(result.is_ok(), format!("result not ok: {:?}", result));
     process.kill().unwrap();
 }
@@ -199,50 +197,50 @@ fn test_get_disallowed_process() {
     process.kill().unwrap();
 }
 
-fn is_maybe_thread_function<T: 'static>(
+fn is_maybe_vm_function<T: 'static>(
     version: &str,
-) -> Box<Fn(usize, usize, T, &Vec<MapRange>) -> bool>
+) -> Box<Fn(usize, T) -> bool>
 where
     T: CopyAddress,
 {
     let function = match version.as_ref() {
-        "1.9.1" => ruby_version::ruby_1_9_1_0::is_maybe_thread,
-        "1.9.2" => ruby_version::ruby_1_9_2_0::is_maybe_thread,
-        "1.9.3" => ruby_version::ruby_1_9_3_0::is_maybe_thread,
-        "2.0.0" => ruby_version::ruby_2_0_0_0::is_maybe_thread,
-        "2.1.0" => ruby_version::ruby_2_1_0::is_maybe_thread,
-        "2.1.1" => ruby_version::ruby_2_1_1::is_maybe_thread,
-        "2.1.2" => ruby_version::ruby_2_1_2::is_maybe_thread,
-        "2.1.3" => ruby_version::ruby_2_1_3::is_maybe_thread,
-        "2.1.4" => ruby_version::ruby_2_1_4::is_maybe_thread,
-        "2.1.5" => ruby_version::ruby_2_1_5::is_maybe_thread,
-        "2.1.6" => ruby_version::ruby_2_1_6::is_maybe_thread,
-        "2.1.7" => ruby_version::ruby_2_1_7::is_maybe_thread,
-        "2.1.8" => ruby_version::ruby_2_1_8::is_maybe_thread,
-        "2.1.9" => ruby_version::ruby_2_1_9::is_maybe_thread,
-        "2.1.10" => ruby_version::ruby_2_1_10::is_maybe_thread,
-        "2.2.0" => ruby_version::ruby_2_2_0::is_maybe_thread,
-        "2.2.1" => ruby_version::ruby_2_2_1::is_maybe_thread,
-        "2.2.2" => ruby_version::ruby_2_2_2::is_maybe_thread,
-        "2.2.3" => ruby_version::ruby_2_2_3::is_maybe_thread,
-        "2.2.4" => ruby_version::ruby_2_2_4::is_maybe_thread,
-        "2.2.5" => ruby_version::ruby_2_2_5::is_maybe_thread,
-        "2.2.6" => ruby_version::ruby_2_2_6::is_maybe_thread,
-        "2.2.7" => ruby_version::ruby_2_2_7::is_maybe_thread,
-        "2.2.8" => ruby_version::ruby_2_2_8::is_maybe_thread,
-        "2.2.9" => ruby_version::ruby_2_2_9::is_maybe_thread,
-        "2.3.0" => ruby_version::ruby_2_3_0::is_maybe_thread,
-        "2.3.1" => ruby_version::ruby_2_3_1::is_maybe_thread,
-        "2.3.2" => ruby_version::ruby_2_3_2::is_maybe_thread,
-        "2.3.3" => ruby_version::ruby_2_3_3::is_maybe_thread,
-        "2.3.4" => ruby_version::ruby_2_3_4::is_maybe_thread,
-        "2.3.5" => ruby_version::ruby_2_3_5::is_maybe_thread,
-        "2.3.6" => ruby_version::ruby_2_3_6::is_maybe_thread,
-        "2.4.0" => ruby_version::ruby_2_4_0::is_maybe_thread,
-        "2.4.1" => ruby_version::ruby_2_4_1::is_maybe_thread,
-        "2.4.2" => ruby_version::ruby_2_4_2::is_maybe_thread,
-        "2.4.3" => ruby_version::ruby_2_4_3::is_maybe_thread,
-        "2.5.0" => ruby_version::ruby_2_5_0_rc1::is_maybe_thread,
+        "1.9.1" => ruby_version::ruby_1_9_1_0::is_maybe_vm,
+        "1.9.2" => ruby_version::ruby_1_9_2_0::is_maybe_vm,
+        "1.9.3" => ruby_version::ruby_1_9_3_0::is_maybe_vm,
+        "2.0.0" => ruby_version::ruby_2_0_0_0::is_maybe_vm,
+        "2.1.0" => ruby_version::ruby_2_1_0::is_maybe_vm,
+        "2.1.1" => ruby_version::ruby_2_1_1::is_maybe_vm,
+        "2.1.2" => ruby_version::ruby_2_1_2::is_maybe_vm,
+        "2.1.3" => ruby_version::ruby_2_1_3::is_maybe_vm,
+        "2.1.4" => ruby_version::ruby_2_1_4::is_maybe_vm,
+        "2.1.5" => ruby_version::ruby_2_1_5::is_maybe_vm,
+        "2.1.6" => ruby_version::ruby_2_1_6::is_maybe_vm,
+        "2.1.7" => ruby_version::ruby_2_1_7::is_maybe_vm,
+        "2.1.8" => ruby_version::ruby_2_1_8::is_maybe_vm,
+        "2.1.9" => ruby_version::ruby_2_1_9::is_maybe_vm,
+        "2.1.10" => ruby_version::ruby_2_1_10::is_maybe_vm,
+        "2.2.0" => ruby_version::ruby_2_2_0::is_maybe_vm,
+        "2.2.1" => ruby_version::ruby_2_2_1::is_maybe_vm,
+        "2.2.2" => ruby_version::ruby_2_2_2::is_maybe_vm,
+        "2.2.3" => ruby_version::ruby_2_2_3::is_maybe_vm,
+        "2.2.4" => ruby_version::ruby_2_2_4::is_maybe_vm,
+        "2.2.5" => ruby_version::ruby_2_2_5::is_maybe_vm,
+        "2.2.6" => ruby_version::ruby_2_2_6::is_maybe_vm,
+        "2.2.7" => ruby_version::ruby_2_2_7::is_maybe_vm,
+        "2.2.8" => ruby_version::ruby_2_2_8::is_maybe_vm,
+        "2.2.9" => ruby_version::ruby_2_2_9::is_maybe_vm,
+        "2.3.0" => ruby_version::ruby_2_3_0::is_maybe_vm,
+        "2.3.1" => ruby_version::ruby_2_3_1::is_maybe_vm,
+        "2.3.2" => ruby_version::ruby_2_3_2::is_maybe_vm,
+        "2.3.3" => ruby_version::ruby_2_3_3::is_maybe_vm,
+        "2.3.4" => ruby_version::ruby_2_3_4::is_maybe_vm,
+        "2.3.5" => ruby_version::ruby_2_3_5::is_maybe_vm,
+        "2.3.6" => ruby_version::ruby_2_3_6::is_maybe_vm,
+        "2.4.0" => ruby_version::ruby_2_4_0::is_maybe_vm,
+        "2.4.1" => ruby_version::ruby_2_4_1::is_maybe_vm,
+        "2.4.2" => ruby_version::ruby_2_4_2::is_maybe_vm,
+        "2.4.3" => ruby_version::ruby_2_4_3::is_maybe_vm,
+        "2.5.0" => ruby_version::ruby_2_5_0_rc1::is_maybe_vm,
         _ => panic!("oh no"),
     };
     Box::new(function)
