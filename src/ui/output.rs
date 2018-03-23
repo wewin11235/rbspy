@@ -33,7 +33,7 @@ pub struct Callgrind(pub callgrind::Stats);
 
 impl Outputter for Callgrind {
     fn record(&mut self, stack: &StackTrace) -> Result<(), Error> {
-        self.0.add(&filter_unknown(&stack.trace));
+        self.0.add(&filter_unknown(&stack).trace);
         Ok(())
     }
 
@@ -48,7 +48,7 @@ pub struct Summary(pub summary::Stats);
 
 impl Outputter for Summary {
     fn record(&mut self, stack: &StackTrace) -> Result<(), Error> {
-        self.0.add_function_name(&filter_unknown(&stack.trace));
+        self.0.add_function_name(&filter_unknown(&stack));
         Ok(())
     }
 
@@ -62,7 +62,7 @@ pub struct SummaryLine(pub summary::Stats);
 
 impl Outputter for SummaryLine {
     fn record(&mut self, stack: &StackTrace) -> Result<(), Error> {
-        self.0.add_lineno(&filter_unknown(&stack.trace));
+        self.0.add_lineno(&filter_unknown(&stack));
         Ok(())
     }
 
@@ -74,13 +74,18 @@ impl Outputter for SummaryLine {
 
 /// Filter out unknown functions from stack trace before reporting.
 /// Most of the time it isn't useful to include the "unknown C function" stacks.
-fn filter_unknown(trace: &Vec<StackFrame>) -> Vec<StackFrame> {
+fn filter_unknown(stack: &StackTrace) -> StackTrace {
     let unknown = StackFrame::unknown_c_function();
-    let vec: Vec<StackFrame> = trace.iter().filter(|&x| x != &unknown).map(|x| x.clone()).collect();
-    if vec.len() == 0 {
+    let vec: Vec<StackFrame> = stack.trace.iter().filter(|&x| x != &unknown).map(|x| x.clone()).collect();
+    let filtered = if vec.len() == 0 {
         vec!(unknown)
     } else {
         vec
+    };
+    StackTrace {
+        trace: filtered,
+        pid: stack.pid,
+        on_cpu: stack.on_cpu,
     }
 }
 
